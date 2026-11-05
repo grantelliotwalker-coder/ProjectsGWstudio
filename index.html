@@ -95,7 +95,37 @@
   .empty { text-align: center; color: var(--faint); padding: 30px 0; font: 500 14px var(--mono); }
   footer { margin-top: 40px; text-align: center; font: 600 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #6c6475; }
   footer span { color: var(--gold); }
-  @media (min-width: 700px) { .hero-in { padding-top: 20px; } }
+
+  /* ---------- desktop ---------- */
+  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .grid .card { margin-bottom: 0; }
+  @media (min-width: 760px) {
+    .hero { padding-left: 40px; padding-right: 40px; }
+    .hero-in { max-width: 1240px; padding-top: 30px; padding-bottom: 330px; }
+    main { max-width: 1320px; }
+    #ridges { height: 420px; }
+    .tag { margin-top: 70px; }
+    h1 { font-size: clamp(76px, 8.5vw, 132px); }
+    .lede { font-size: 20px; max-width: 560px; }
+    main { padding: 0 40px 60px; margin-top: -120px; }
+    .search { max-width: 560px; }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+    .card.feat { grid-column: 1 / -1; }
+    .card.feat a.main { padding: 26px; }
+    .card.feat .ico { width: 60px; height: 60px; border-radius: 16px; }
+    .card.feat .ico svg { width: 28px; height: 28px; }
+    .card.feat .name { font-size: 26px; }
+    .card.feat .chips { padding: 0 26px 26px 112px; margin-top: -12px; }
+    .sec-h { margin-top: 52px; }
+    a.main:hover { background: #ffffff05; }
+    .card:hover { border-color: var(--line-hi); transform: translateY(-2px); }
+    .card.feat:hover { border-color: #6a5a62; }
+    .chips a:hover { color: var(--ink); border-color: var(--c); }
+    .card { transition: border-color .2s, transform .2s; }
+  }
+  @media (min-width: 1100px) {
+    .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
 </style>
 </head>
 <body>
@@ -117,6 +147,7 @@
 
   <section>
     <div class="sec-h"><b>01</b> Music &amp; Audio <span class="count"></span></div>
+    <div class="grid">
 
     <div class="card music feat">
       <a class="main" href="https://masterscope.gwstudio.com.au/">
@@ -156,10 +187,12 @@
       </a>
       <div class="chips"><a href="https://lyricflow-scroller.com/playlist.html">Playlist editor</a></div>
     </div>
+    </div>
   </section>
 
   <section>
     <div class="sec-h"><b>02</b> Business <span class="count"></span></div>
+    <div class="grid">
 
     <div class="card biz">
       <a class="main" href="https://opctools.gwstudio.com.au/">
@@ -176,10 +209,12 @@
         <div class="go"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
       </a>
     </div>
+    </div>
   </section>
 
   <section>
     <div class="sec-h"><b>03</b> Life &amp; Tools <span class="count"></span></div>
+    <div class="grid">
 
     <div class="card life">
       <a class="main" href="https://budgetneedsvswants.com/">
@@ -243,6 +278,7 @@
         <div class="go"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
       </a>
     </div>
+    </div>
   </section>
 
   <p class="empty hidden" id="empty">Nothing matches that.</p>
@@ -278,7 +314,7 @@
   if (!ctx) return;
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let W = 0, H = 0, dpr = 1, raf = 0, last = 0;
-  const ROWS = 22, PTS = 64;
+  const ROWS = 22, PTS = innerWidth > 900 ? 110 : 64;
   const size = () => {
     dpr = Math.min(devicePixelRatio || 1, 2);
     W = cv.clientWidth; H = cv.clientHeight;
@@ -294,7 +330,7 @@
     const t = now / 1000;
     ctx.clearRect(0, 0, W, H);
     const top = H * 0.30, bottom = H * 0.86, gap = (bottom - top) / ROWS;
-    const amp = Math.min(W, 700) * 0.11;
+    const amp = Math.min(H * 0.55, Math.min(W, 1400) * 0.11);
     const grad = ctx.createLinearGradient(0, 0, W, 0);
     grad.addColorStop(0, '#a9b8ff'); grad.addColorStop(.45, '#fbb33c'); grad.addColorStop(1, '#ec6a3a');
     for (let r = 0; r < ROWS; r++) {
