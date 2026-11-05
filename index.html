@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="locked">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -126,9 +126,52 @@
   @media (min-width: 1100px) {
     .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
+
+  /* ---------- passcode lock (iPhone style) ---------- */
+  html.locked body > :not(#lock) { visibility: hidden; }
+  #lock { position: fixed; inset: 0; z-index: 100; display: none; flex-direction: column; align-items: center;
+    padding: calc(env(safe-area-inset-top) + 34px) 24px calc(env(safe-area-inset-bottom) + 24px);
+    font-family: -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; color: #fff;
+    background: radial-gradient(120% 70% at 20% 0%, #3a2a12 0%, transparent 60%),
+                radial-gradient(100% 60% at 100% 100%, #3b1b10 0%, transparent 60%),
+                radial-gradient(90% 60% at 0% 100%, #1d2140 0%, transparent 60%), #07080f;
+    -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+  html.locked #lock { display: flex; }
+  #lock .l-date { font-size: 19px; font-weight: 600; opacity: .85; letter-spacing: .01em; }
+  #lock .l-time { font-size: clamp(78px, 24vw, 104px); font-weight: 700; line-height: 1; letter-spacing: -.02em; margin-top: 2px;
+    background: linear-gradient(180deg, #fff 30%, #f4ede4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  #lock .l-spacer { flex: 1; min-height: 20px; max-height: 70px; }
+  #lock .l-icon { width: 22px; height: 22px; opacity: .9; margin-bottom: 10px; }
+  #lock .l-title { font-size: 20px; font-weight: 500; margin-bottom: 18px; }
+  #lock .l-dots { display: flex; gap: 22px; margin-bottom: 38px; height: 14px; }
+  #lock .l-dots i { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid #fff; transition: background .12s; }
+  #lock .l-dots i.on { background: #fff; }
+  #lock .l-dots.shake { animation: lshake .45s cubic-bezier(.36,.07,.19,.97); }
+  @keyframes lshake { 15%,55% { transform: translateX(-14px); } 35%,75% { transform: translateX(14px); } 90% { transform: translateX(-4px); } }
+  #lock .l-pad { display: grid; grid-template-columns: repeat(3, 80px); gap: 16px 26px; }
+  #lock .l-key { width: 80px; height: 80px; border-radius: 50%; border: 0; color: #fff; cursor: pointer;
+    background: rgba(255,255,255,.14); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; transition: background .25s; }
+  #lock .l-key:active, #lock .l-key.press { background: rgba(255,255,255,.42); transition: none; }
+  #lock .l-key b { font-size: 36px; font-weight: 400; line-height: 1; }
+  #lock .l-key small { font-size: 10px; font-weight: 600; letter-spacing: .18em; margin-top: 2px; opacity: .9; min-height: 12px; }
+  #lock .l-foot { width: 100%; max-width: 292px; display: flex; justify-content: flex-end; margin-top: 22px; }
+  #lock .l-del { background: none; border: 0; color: #fff; font-size: 17px; cursor: pointer; padding: 6px 4px; visibility: hidden; }
+  #lock .l-del.show { visibility: visible; }
+  @media (max-height: 700px) { #lock .l-key { width: 70px; height: 70px; } #lock .l-pad { grid-template-columns: repeat(3,70px); gap: 12px 24px; } #lock .l-time { font-size: 70px; } }
 </style>
 </head>
 <body>
+<div id="lock" role="dialog" aria-label="Enter passcode">
+  <div class="l-date" id="lDate"></div>
+  <div class="l-time" id="lTime"></div>
+  <div class="l-spacer"></div>
+  <svg class="l-icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+  <div class="l-title">Enter Passcode</div>
+  <div class="l-dots" id="lDots"><i></i><i></i><i></i><i></i></div>
+  <div class="l-pad" id="lPad"></div>
+  <div class="l-foot"><button class="l-del" id="lDel" type="button">Delete</button></div>
+</div>
 <div class="hero">
   <canvas id="ridges" aria-hidden="true"></canvas>
   <div class="hero-in">
@@ -285,6 +328,66 @@
   <footer>gwstudio<span>.</span>com<span>.</span>au</footer>
 </main>
 
+<script>
+/* ---------- passcode lock: asks every time the page opens or comes back ---------- */
+(() => {
+  const PIN_HASH = "b3c6505b0a38764baef84691e53a3415d332cdcd90c6beac76dcf7dd8eacb28d"; // SHA-256 of "gwstudio:" + passcode
+  const LEN = 4, root = document.documentElement;
+  const dots = [...document.querySelectorAll("#lDots i")], dotsEl = document.getElementById("lDots");
+  const del = document.getElementById("lDel"), pad = document.getElementById("lPad");
+  let code = "", busy = false;
+
+  [["1",""],["2","ABC"],["3","DEF"],["4","GHI"],["5","JKL"],["6","MNO"],["7","PQRS"],["8","TUV"],["9","WXYZ"],["",""],["0",""],["",""]]
+    .forEach(([n, l]) => {
+      if (!n) { pad.appendChild(document.createElement("span")); return; }
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "l-key"; b.dataset.n = n;
+      b.innerHTML = `<b>${n}</b><small>${l}</small>`;
+      b.addEventListener("click", () => press(n));
+      pad.appendChild(b);
+    });
+
+  function tick() {
+    const d = new Date();
+    document.getElementById("lTime").textContent = d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit", hour12: true }).replace(/\s?[ap]m/i, "");
+    document.getElementById("lDate").textContent = d.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
+  }
+  tick(); setInterval(tick, 10000);
+
+  const draw = () => { dots.forEach((d, i) => d.classList.toggle("on", i < code.length)); del.classList.toggle("show", code.length > 0); };
+
+  async function sha(text) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  async function press(n) {
+    if (busy || code.length >= LEN) return;
+    code += n; draw();
+    if (code.length < LEN) return;
+    busy = true;
+    if ((await sha("gwstudio:" + code)) === PIN_HASH) {
+      setTimeout(() => { root.classList.remove("locked"); code = ""; draw(); busy = false; }, 120);
+    } else {
+      dotsEl.classList.add("shake");
+      setTimeout(() => { dotsEl.classList.remove("shake"); code = ""; draw(); busy = false; }, 480);
+    }
+  }
+
+  del.addEventListener("click", () => { code = code.slice(0, -1); draw(); });
+  addEventListener("keydown", (e) => {
+    if (!root.classList.contains("locked")) return;
+    if (/^\d$/.test(e.key)) {
+      const k = pad.querySelector(`[data-n="${e.key}"]`);
+      k && (k.classList.add("press"), setTimeout(() => k.classList.remove("press"), 120));
+      press(e.key);
+    } else if (e.key === "Backspace") { code = code.slice(0, -1); draw(); }
+  });
+  // Lock again whenever the page is left and reopened.
+  document.addEventListener("visibilitychange", () => { if (document.hidden) { root.classList.add("locked"); code = ""; draw(); } });
+  addEventListener("pageshow", (e) => { if (e.persisted) root.classList.add("locked"); });
+})();
+</script>
 <script>
 /* ---------- search + counts ---------- */
 (() => {
