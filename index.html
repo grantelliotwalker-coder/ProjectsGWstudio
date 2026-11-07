@@ -154,7 +154,7 @@
   @keyframes lshake { 15%,55% { transform: translateX(-14px); } 35%,75% { transform: translateX(14px); } 90% { transform: translateX(-4px); } }
   #lock .l-pad { display: grid; grid-template-columns: repeat(3, 80px); gap: 16px 26px; }
   #lock .l-key { width: 80px; height: 80px; border-radius: 50%; border: 0; color: #fff; cursor: pointer;
-    background: rgba(255,255,255,.14); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    background: rgba(255,255,255,.11); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     display: flex; flex-direction: column; align-items: center; justify-content: center; transition: background .25s; }
   #lock .l-key:active, #lock .l-key.press { background: rgba(255,255,255,.42); transition: none; }
   #lock .l-key b { font-size: 36px; font-weight: 400; line-height: 1; }
@@ -375,7 +375,7 @@ const Ripple = (() => {
       const row = y * W;
       for (let x = 1; x < W - 1; x++) {
         const i = row + x;
-        const v = ((a[i - 1] + a[i + 1] + a[i - W] + a[i + W]) * 0.5 - b[i]) * 0.982;
+        const v = ((a[i - 1] + a[i + 1] + a[i - W] + a[i + W]) * 0.5 - b[i]) * 0.988;
         b[i] = v;
         energy += v < 0 ? -v : v;
       }
@@ -389,9 +389,13 @@ const Ripple = (() => {
         const i = y * W + x, o = i * 4;
         const slope = (a[i - 1] - a[i + 1]) + (a[i - W] - a[i + W]);
         if (slope > 0) {
-          px[o] = 255; px[o + 1] = 214; px[o + 2] = 150; px[o + 3] = Math.min(170, slope * 13);
+          // soft tone-map so overlapping waves glow instead of clipping into blotches
+          const k = 1 - Math.exp(-slope * 0.09);       // 0..1
+          const spec = k * k;                           // steep crests go white-hot
+          px[o] = 255; px[o + 1] = 205 + 50 * spec; px[o + 2] = 130 + 125 * spec; px[o + 3] = 235 * k;
         } else {
-          px[o] = 150; px[o + 1] = 170; px[o + 2] = 255; px[o + 3] = Math.min(80, -slope * 6);
+          const k = 1 - Math.exp(slope * 0.07);
+          px[o] = 120; px[o + 1] = 150; px[o + 2] = 255; px[o + 3] = 150 * k;
         }
       }
     octx.putImageData(img, 0, 0);
@@ -401,7 +405,7 @@ const Ripple = (() => {
     const dpr = cv.width / lock.clientWidth;
     ctx.drawImage(off, 0, 0, W * CELL * dpr, H * CELL * dpr);
     // keep animating only while there's visible motion (saves battery)
-    if (energy / (W * H) > 0.0015) raf = requestAnimationFrame(step);
+    if (energy / (W * H) > 0.002) raf = requestAnimationFrame(step);
     else { raf = 0; ctx.clearRect(0, 0, cv.width, cv.height); a.fill(0); b.fill(0); }
   }
 
@@ -412,21 +416,21 @@ const Ripple = (() => {
 
   lock.addEventListener("pointerdown", (e) => {
     const l = lock.getBoundingClientRect();
-    drop(e.clientX - l.left, e.clientY - l.top, 24, 11);
+    drop(e.clientX - l.left, e.clientY - l.top, 26, 18);
   });
   addEventListener("resize", size);
   size();
 
   return {
-    at: (el) => { const [x, y] = local(el); drop(x, y, 24, 11); },
+    at: (el) => { const [x, y] = local(el); drop(x, y, 26, 18); },
     wobble: (el) => {
       const [x, y] = local(el);
-      [-60, 0, 60].forEach((dx, i) => setTimeout(() => drop(x + dx, y, 18, 7), i * 90));
+      [-60, 0, 60].forEach((dx, i) => setTimeout(() => drop(x + dx, y, 20, 13), i * 90));
     },
     splash: () => {
       const w = lock.clientWidth, h = lock.clientHeight;
-      drop(w / 2, h * 0.55, 70, 18);
-      setTimeout(() => drop(w / 2, h * 0.55, 30, -10), 80);
+      drop(w / 2, h * 0.55, 80, 30);
+      setTimeout(() => drop(w / 2, h * 0.55, 34, -18), 80);
     },
   };
 })();
