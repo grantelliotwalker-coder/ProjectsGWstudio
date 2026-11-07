@@ -441,6 +441,9 @@ const Ripple = (() => {
   };
 
   lock.addEventListener("pointerdown", (e) => {
+    // A tap on a number ripples from the centre of that key; anywhere else, from the finger.
+    const key = e.target.closest && e.target.closest(".l-key");
+    if (key) { const [x, y] = local(key); splashAt(x, y); return; }
     const c = cv.getBoundingClientRect();
     splashAt(e.clientX - c.left, e.clientY - c.top);
   });
