@@ -349,16 +349,24 @@ const Ripple = (() => {
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let W = 0, H = 0, a, b, img, raf = 0;
 
+  // Everything is measured from the canvas's own on-screen box, and re-measured whenever it
+  // changes (Safari's toolbars resize the screen without warning, which used to misalign ripples).
+  let cssW = 0, cssH = 0;
   function size() {
+    const r = cv.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    if (Math.round(r.width) === cssW && Math.round(r.height) === cssH) return true;
+    cssW = Math.round(r.width); cssH = Math.round(r.height);
     const dpr = Math.min(devicePixelRatio || 1, 2);
-    cv.width = lock.clientWidth * dpr; cv.height = lock.clientHeight * dpr;
-    W = Math.ceil(lock.clientWidth / CELL) + 2; H = Math.ceil(lock.clientHeight / CELL) + 2;
+    cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
+    W = Math.ceil(cssW / CELL) + 1; H = Math.ceil(cssH / CELL) + 1;
     a = new Float32Array(W * H); b = new Float32Array(W * H);
     off.width = W; off.height = H; img = octx.createImageData(W, H);
+    return true;
   }
 
   function drop(px, py, radius, strength) {
-    if (still || !W) return;
+    if (still || !size()) return;
     const cx = px / CELL, cy = py / CELL, r = radius / CELL;
     for (let y = Math.max(1, (cy - r) | 0); y < Math.min(H - 1, cy + r + 1); y++)
       for (let x = Math.max(1, (cx - r) | 0); x < Math.min(W - 1, cx + r + 1); x++) {
@@ -417,8 +425,9 @@ const Ripple = (() => {
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    const dpr = cv.width / lock.clientWidth;
-    ctx.drawImage(off, 0, 0, W * CELL * dpr, H * CELL * dpr);
+    // cell (x, y) sits at CSS (x*CELL, y*CELL); scale straight into the canvas's pixels
+    const sx = cv.width / cssW, sy = cv.height / cssH;
+    ctx.drawImage(off, -CELL / 2 * sx, -CELL / 2 * sy, W * CELL * sx, H * CELL * sy);
   }
 
   function splashAt(x, y) {
@@ -427,15 +436,16 @@ const Ripple = (() => {
   }
 
   const local = (el) => {
-    const r = el.getBoundingClientRect(), l = lock.getBoundingClientRect();
-    return [r.left + r.width / 2 - l.left, r.top + r.height / 2 - l.top];
+    const r = el.getBoundingClientRect(), c = cv.getBoundingClientRect();
+    return [r.left + r.width / 2 - c.left, r.top + r.height / 2 - c.top];
   };
 
   lock.addEventListener("pointerdown", (e) => {
-    const l = lock.getBoundingClientRect();
-    splashAt(e.clientX - l.left, e.clientY - l.top);
+    const c = cv.getBoundingClientRect();
+    splashAt(e.clientX - c.left, e.clientY - c.top);
   });
-  addEventListener("resize", size);
+  if ("ResizeObserver" in window) new ResizeObserver(() => size()).observe(cv);
+  addEventListener("resize", () => size());
   size();
 
   return {
@@ -445,7 +455,7 @@ const Ripple = (() => {
       [-60, 0, 60].forEach((dx, i) => setTimeout(() => drop(x + dx, y, 20, 13), i * 90));
     },
     splash: () => {
-      const w = lock.clientWidth, h = lock.clientHeight;
+      const w = cssW, h = cssH;
       drop(w / 2, h * 0.55, 80, 30);
       setTimeout(() => drop(w / 2, h * 0.55, 34, -18), 80);
     },
