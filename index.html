@@ -137,7 +137,7 @@
                 radial-gradient(90% 60% at 0% 100%, #1d2140 0%, transparent 60%), #07080f;
     -webkit-user-select: none; user-select: none; touch-action: manipulation; }
   html.locked #lock { display: flex; }
-  #lRipple { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+  #lRipple { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; filter: blur(1.5px); }
   #lock > :not(#lRipple) { position: relative; z-index: 1; }
   #lock.unlocking { animation: lfade .45s ease .25s forwards; }
   @keyframes lfade { to { opacity: 0; transform: scale(1.04); } }
@@ -365,12 +365,25 @@ const Ripple = (() => {
         const d = Math.hypot(x - cx, y - cy);
         if (d < r) a[y * W + x] += strength * Math.cos((d / r) * Math.PI / 2);
       }
+    energy = Infinity; // keep the loop alive until the first physics step measures it
     if (!raf) raf = requestAnimationFrame(step);
   }
 
-  function step() {
+  let last = 0, acc = 0, energy = 0;
+  function step(now) {
+    // run the physics at a fixed 60 Hz whatever the screen's refresh rate (60/120 Hz)
+    if (!last) last = now;
+    acc += Math.min(now - last, 100); last = now;
+    let ran = false;
+    while (acc >= 1000 / 60) { sim(); acc -= 1000 / 60; ran = true; }
+    if (ran) render();
+    if (energy / (W * H) > 0.002) raf = requestAnimationFrame(step);
+    else { raf = 0; last = 0; acc = 0; ctx.clearRect(0, 0, cv.width, cv.height); a.fill(0); b.fill(0); }
+  }
+
+  function sim() {
     // classic two-buffer wave equation with damping
-    let energy = 0;
+    energy = 0;
     for (let y = 1; y < H - 1; y++) {
       const row = y * W;
       for (let x = 1; x < W - 1; x++) {
@@ -381,7 +394,9 @@ const Ripple = (() => {
       }
     }
     const t = a; a = b; b = t;
+  }
 
+  function render() {
     // shade by surface slope: lit edges warm gold/cream, troughs faintly blue
     const px = img.data;
     for (let y = 1; y < H - 1; y++)
@@ -390,12 +405,12 @@ const Ripple = (() => {
         const slope = (a[i - 1] - a[i + 1]) + (a[i - W] - a[i + W]);
         if (slope > 0) {
           // soft tone-map so overlapping waves glow instead of clipping into blotches
-          const k = 1 - Math.exp(-slope * 0.09);       // 0..1
-          const spec = k * k;                           // steep crests go white-hot
-          px[o] = 255; px[o + 1] = 205 + 50 * spec; px[o + 2] = 130 + 125 * spec; px[o + 3] = 235 * k;
+          const k = 1 - Math.exp(-slope * 0.16);       // 0..1
+          const spec = k * k * k;                       // steep crests go white-hot
+          px[o] = 255; px[o + 1] = 200 + 55 * spec; px[o + 2] = 120 + 135 * spec; px[o + 3] = 255 * k;
         } else {
-          const k = 1 - Math.exp(slope * 0.07);
-          px[o] = 120; px[o + 1] = 150; px[o + 2] = 255; px[o + 3] = 150 * k;
+          const k = 1 - Math.exp(slope * 0.12);
+          px[o] = 90; px[o + 1] = 130; px[o + 2] = 255; px[o + 3] = 190 * k;
         }
       }
     octx.putImageData(img, 0, 0);
@@ -404,9 +419,11 @@ const Ripple = (() => {
     ctx.imageSmoothingQuality = "high";
     const dpr = cv.width / lock.clientWidth;
     ctx.drawImage(off, 0, 0, W * CELL * dpr, H * CELL * dpr);
-    // keep animating only while there's visible motion (saves battery)
-    if (energy / (W * H) > 0.002) raf = requestAnimationFrame(step);
-    else { raf = 0; ctx.clearRect(0, 0, cv.width, cv.height); a.fill(0); b.fill(0); }
+  }
+
+  function splashAt(x, y) {
+    drop(x, y, 22, 26);
+    setTimeout(() => drop(x, y, 12, -20), 50);
   }
 
   const local = (el) => {
@@ -416,13 +433,13 @@ const Ripple = (() => {
 
   lock.addEventListener("pointerdown", (e) => {
     const l = lock.getBoundingClientRect();
-    drop(e.clientX - l.left, e.clientY - l.top, 26, 18);
+    splashAt(e.clientX - l.left, e.clientY - l.top);
   });
   addEventListener("resize", size);
   size();
 
   return {
-    at: (el) => { const [x, y] = local(el); drop(x, y, 26, 18); },
+    at: (el) => { const [x, y] = local(el); splashAt(x, y); },
     wobble: (el) => {
       const [x, y] = local(el);
       [-60, 0, 60].forEach((dx, i) => setTimeout(() => drop(x + dx, y, 20, 13), i * 90));
